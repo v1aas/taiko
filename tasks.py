@@ -1,13 +1,12 @@
-from web3 import Web3
-from loguru import logger
-from web3.middleware import geth_poa_middleware
-from client import Client
-import random
 import time
 import json
+import random
 import datetime
-
-RPC = "https://rpc.katla.taiko.xyz"
+from web3 import Web3
+from loguru import logger
+from client import Client
+from web3.middleware import geth_poa_middleware
+from config import *
 
 WEB3 = Web3(Web3.HTTPProvider(RPC))
 WEB3.middleware_onion.inject(geth_poa_middleware, layer=0)
@@ -19,7 +18,7 @@ def get_uni_abi():
 def get_random_word():
     with open('words.txt', 'r') as file:
         return random.choice([line.strip() for line in file.readlines()]) + "crypto"
-    
+
 def get_wallets():
     with open('wallets.txt', 'r') as file:
         return [line.strip() for line in file.readlines()]
@@ -34,11 +33,13 @@ def get_inputs(amount, token):
     contrats = {
         'usdc': [
             "0011e559da84dde3f841e22dc33f3adbf184d84a000bb8ae2c46ddb314b9ba74",
-            "3c6dee4878f151881333d9000000000000000000000000000000000000000000"
+            "3c6dee4878f151881333d9000000000000000000000000000000000000000000",
+            USDC_TO_ETH
         ],
         'horse': [
             "0011e559da84dde3f841e22dc33f3adbf184d84a0001f4d69d3e64d71844bbdd",
-            "a51cd7f23ed3631e9fac49000000000000000000000000000000000000000000"
+            "a51cd7f23ed3631e9fac49000000000000000000000000000000000000000000",
+            HORSE_TO_ETH
         ]
     }
     hex1 = WEB3.to_hex(2)
@@ -49,7 +50,8 @@ def get_inputs(amount, token):
 
     hex1 = WEB3.to_hex(1)
     hex2 = WEB3.to_hex(WEB3.to_wei(amount, 'ether'))
-    hex3 = WEB3.to_hex(825053000)
+    rate = contrats.get(token)[2]
+    hex3 = WEB3.to_hex(int(amount / rate * 0.995))
     hex4 = WEB3.to_hex(160)
     hex5 = WEB3.to_hex(0)
     hex6 = WEB3.to_hex(43)
@@ -61,7 +63,7 @@ def get_inputs(amount, token):
 def swap_eth_to_usdc(key):
     logger.info("Свап eth to usdc")
     abi = get_uni_abi()
-    amount = round(random.uniform(0.0001, 0.001), 6)
+    amount = round(random.uniform(0.0005, 0.001), 6)
     client = Client(WEB3, key)
     contract = client.web3.eth.contract(address="0xD2C3cbB943FEd0Cfc8389b14a3f6df518fD46346", abi=abi)
     max_fee_priotiry_gas, max_fee_per_gas = get_eip1559_gas(client.web3)
@@ -121,7 +123,7 @@ def wrap_eth(key):
 def swap_eth_to_horse(key):
     logger.info("Свап eth to horse")
     abi = get_uni_abi()
-    amount = round(random.uniform(0.0001, 0.001), 6)
+    amount = round(random.uniform(0.0005, 0.001), 6)
     client = Client(WEB3, key)
     contract = client.web3.eth.contract(address="0xD2C3cbB943FEd0Cfc8389b14a3f6df518fD46346", abi=abi)
     max_fee_priotiry_gas, max_fee_per_gas = get_eip1559_gas(client.web3)
@@ -187,19 +189,19 @@ def mint_crypto_domain(key):
             logger.error(f"Ошибка. Статус: {receipt['status']}")
     except Exception as e:
         logger.error(f"Ошибка {e}")
-    
-def random_tasks(min, max):
+
+def random_tasks():
     tasks = [swap_eth_to_usdc, swap_eth_to_horse, wrap_eth, mint_crypto_domain]
     wallets = get_wallets()
     for num, wallet in enumerate(wallets, start=1):
         logger.info(f"{num}/{len(wallets)}. {WEB3.eth.account.from_key(wallet).address} ")
-        amount = random.randrange(min, max)
+        amount = random.randrange(MIN, MAX)
         for task in random.choices(tasks, k=amount):
             task(wallet)
-            sec = random.randint(10, 20)
+            sec = random.randint(MIN_SEC_TXN, MAX_SEC_TXN)
             logger.info(f"Сплю между следующей транзакцией {sec}")
             time.sleep(sec)
-        sec = random.randint(30, 120)
+        sec = random.randint(MIN_SEC_WALL, MAX_SEC_WALL)
         logger.info(f"Сплю между следующим кошельком {sec}")
         time.sleep(sec)
     logger.success("Скрипт завершил свою работу")
